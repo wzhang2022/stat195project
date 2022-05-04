@@ -237,6 +237,8 @@ class BaseLassoNet(BaseEstimator, metaclass=ABCMeta):
 
         def validation_obj():
             with torch.no_grad():
+                # print("criterion", self.criterion)
+                # print("model", self.model)
                 return (
                     self.criterion(model(X_val), y_val).item()
                     + lambda_ * model.l1_regularization_skip().item()
@@ -485,7 +487,7 @@ class LassoNetClassifier(
 ):
     """Use LassoNet as classifier"""
 
-    criterion = None
+    criterion = torch.nn.CrossEntropyLoss()
 
     def _convert_y(self, y) -> torch.TensorType:
         y = torch.LongTensor(y).to(self.device)
