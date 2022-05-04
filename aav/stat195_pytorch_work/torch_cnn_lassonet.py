@@ -134,7 +134,7 @@ class CNNLassoNetModel(nn.Module):
         self.seq_len = seq_len
         self.num_residues = num_residues
         self.layers = nn.ModuleList(
-            [nn.Linear(self.num_residues, self.num_residues)]
+            [nn.Linear(self.seq_len, self.seq_len)]
         )
         self.skip = nn.Linear(seq_len, 2)
         self.aa_embedding = nn.Linear(num_residues, 1)
@@ -153,12 +153,11 @@ class CNNLassoNetModel(nn.Module):
     def forward(self, inp):
         inp = inp.reshape(-1, 58, 20)
         result = self.skip(self.aa_embedding(inp).reshape(-1, 58))
-        scaled_input = inp @ torch.diag(torch.diagonal(self.layers[0].weight))
-        cnn_output = self.cnn_module(scaled_input)
+        scaled_input = inp.transpose(1, 2) @ torch.diag(torch.diagonal(self.layers[0].weight))
+        cnn_output = self.cnn_module(scaled_input.transpose(1, 2))
         return result + cnn_output
 
     def prox(self, *, lambda_, lambda_bar=0, M=1):
-        print(f"beta: {self.skip.weight.shape}, theta: {self.layers[0].weight.shape}")
         with torch.no_grad():
             inplace_prox(
                 beta=self.skip,
