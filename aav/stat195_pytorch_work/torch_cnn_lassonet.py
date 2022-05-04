@@ -5,6 +5,8 @@ from einops.einops import rearrange
 from torch import optim
 from torch.utils.data import Dataset, DataLoader, TensorDataset
 
+from lassonet import LassoNetClassifier, LassoNet
+
 
 class CNNBaseline(nn.Module):
     def __init__(
@@ -16,7 +18,8 @@ class CNNBaseline(nn.Module):
             pool_width,
             conv_depth_multiplier,
             fc_size,
-            fc_size_multiplier
+            fc_size_multiplier,
+            flattened_inputs=False
     ):
         super(CNNBaseline, self).__init__()
         self.seq_encoding_length = seq_encoding_length
@@ -54,6 +57,7 @@ class CNNBaseline(nn.Module):
             nn.BatchNorm1d(int(fc_size * fc_size_multiplier))
         )
         self.output_layer = nn.Linear(int(fc_size * fc_size_multiplier), 2)
+        self.flattened_inputs = flattened_inputs
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         """
@@ -65,6 +69,8 @@ class CNNBaseline(nn.Module):
             torch tensor of shape (batch_size,) that contains floating-point values
             of sequence viability
         """
+        if self.flattened_inputs:
+            x = x.reshape(-1, self.seq_encoding_length, self.residue_encoding_size)
         x = rearrange(x, 'b l c -> b c l')
         x = self.conv_block_1(x)
         x = self.conv_block_2(x)
@@ -89,7 +95,7 @@ class CNNModel:
             conv_depth_multiplier=2,
         ).to(self.device)
 
-    def fit(self, X, y, batch_size=128, num_epochs=30):
+    def path(self, X, y, batch_size=128, num_epochs=30):
         assert isinstance(X, np.ndarray), "input must be numpy array"
         assert isinstance(y, np.ndarray), "input must be numpy array"
         assert X.shape[0] == y.shape[0], "features and labels must have the same number of samples"
@@ -113,7 +119,51 @@ class CNNModel:
         self.net.eval()
         with torch.no_grad():
             y_pred = []
-            for i, (seq, labels) in enumerate(test_loader):
+            for i, seq in enumerate(test_loader):
                 outputs = self.net(seq.to(self.device))
                 y_pred.append(outputs.argmax(dim=1).cpu().numpy())
         return np.concatenate(y_pred, axis=0)
+
+
+class CNNLassoNetModel(LassoNet):
+    def __init__(self, seq_len=58, num_residues=20):
+        super(CNNLassoNetModel, self).__init__()
+        self.seq_len = seq_len
+        self.num_residues = num_residues
+        self.layers = nn.ModuleList(
+            [nn.Linear(self.num_residues, self.num_residues)]
+        )
+        self.skip = nn.Linear(seq_len, 2)
+        self.aa_embedding = nn.Linear(num_residues, 1)
+        self.cnn_module = CNNBaseline(
+            seq_encoding_length=58,
+            residue_encoding_size=20,
+            fc_size=128,
+            conv_depth=12,
+            conv_width=7,
+            pool_width=2,
+            fc_size_multiplier=0.5,
+            conv_depth_multiplier=2,
+            flattened_inputs=True
+        )
+
+    def forward(self, inp):
+        inp = inp.reshape(-1, 58, 20)
+        result = self.skip(self.aa_embedding(inp).reshape(-1, 58))
+        scaled_input = inp @ torch.diag(torch.diagonal(self.layers[0].weight))
+        cnn_output = self.cnn_module(scaled_input)
+        return result + cnn_output
+
+
+class CNNLassoNetClassifier(LassoNetClassifier):
+    def __init__(self, *args, **kwargs):
+        super(CNNLassoNetClassifier, self).__init__(*args, **kwargs, batch_size=128)
+    def _init_model(self, X, y):
+        output_shape = self._output_shape(y)
+        if self.class_weight is not None:
+            assert output_shape == len(self.class_weight)
+        if self.torch_seed is not None:
+            torch.manual_seed(self.torch_seed)
+        self.model = CNNLassoNetModel(
+            seq_len=58, num_residues=20
+        ).to(self.device)
