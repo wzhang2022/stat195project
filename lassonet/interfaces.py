@@ -394,7 +394,7 @@ class BaseLassoNet(BaseEstimator, metaclass=ABCMeta):
         pbar = tqdm(lambda_seq)
         for i, current_lambda in enumerate(pbar):
             pbar.set_description(f"Iteration {i} - Lambda: {current_lambda}, selected_count: {self.model.selected_count()}")
-            if self.model.selected_count() == 0:
+            if self.model.selected_count() <= 1:
                 break
             hist.append(
                 self._train(

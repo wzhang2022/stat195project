@@ -1,5 +1,6 @@
 from itertools import islice
 
+from tqdm import tqdm
 import numpy as np
 import torch.nn as nn
 import torch
@@ -85,7 +86,7 @@ class CNNBaseline(nn.Module):
 
 
 class CNNModel:
-    def __init__(self):
+    def __init__(self, flattened_inputs=False):
         self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
         self.net = CNNBaseline(
             seq_encoding_length=58,
@@ -96,20 +97,24 @@ class CNNModel:
             pool_width=2,
             fc_size_multiplier=0.5,
             conv_depth_multiplier=2,
+            flattened_inputs=flattened_inputs
         ).to(self.device)
+        self.flattened_inputs = flattened_inputs
 
     def path(self, X, y, batch_size=128, num_epochs=30):
         assert isinstance(X, np.ndarray), "input must be numpy array"
         assert isinstance(y, np.ndarray), "input must be numpy array"
         assert X.shape[0] == y.shape[0], "features and labels must have the same number of samples"
+        if self.flattened_inputs:
+            X = X.reshape(-1, 58, 20)
         assert (X.shape[1], X.shape[2]) == (58, 20), "input features must have shape (sequence_len, num_residues)"
 
         criterion = nn.NLLLoss()
         optimizer = optim.AdamW(self.net.parameters(), lr=0.001)
-        train_set = TensorDataset(torch.as_tensor(X), torch.as_tensor(y))
+        train_set = TensorDataset(torch.as_tensor(X, dtype=torch.float32), torch.as_tensor(y, dtype=torch.float32))
         train_loader = DataLoader(train_set, batch_size=128, shuffle=True)
         self.net.train()
-        for epoch in range(num_epochs):
+        for epoch in tqdm(range(num_epochs)):
             for i, (seq, labels) in enumerate(train_loader):
                 optimizer.zero_grad()
                 outputs = self.net(seq.to(self.device))
@@ -118,7 +123,7 @@ class CNNModel:
                 optimizer.step()
 
     def predict(self, X):
-        test_loader = DataLoader(X, batch_size=128, shuffle=False)
+        test_loader = DataLoader(X.astype(np.float32), batch_size=128, shuffle=False)
         self.net.eval()
         with torch.no_grad():
             y_pred = []
@@ -137,7 +142,7 @@ class CNNLassoNetModel(nn.Module):
             [nn.Linear(self.seq_len, self.seq_len)]
         )
         self.skip = nn.Linear(seq_len, 2)
-        self.aa_embedding = nn.Linear(num_residues, 1)
+        self.aa_embedding = nn.Parameter(torch.randn(num_residues) / num_residues ** 0.5)
         self.cnn_module = CNNBaseline(
             seq_encoding_length=58,
             residue_encoding_size=20,
@@ -152,7 +157,7 @@ class CNNLassoNetModel(nn.Module):
 
     def forward(self, inp):
         inp = inp.reshape(-1, 58, 20)
-        result = self.skip(self.aa_embedding(inp).reshape(-1, 58))
+        result = self.skip(inp @ (self.aa_embedding / self.aa_embedding.norm()))
         scaled_input = inp.transpose(1, 2) @ torch.diag(torch.diagonal(self.layers[0].weight))
         cnn_output = self.cnn_module(scaled_input.transpose(1, 2))
         return result + cnn_output
@@ -173,15 +178,15 @@ class CNNLassoNetModel(nn.Module):
         which is bounded by the skip connection
         """
         ans = 0
-        for layer in islice(self.layers, 0, None):
+        for param in self.cnn_module.parameters():
             ans += (
                 torch.norm(
-                    layer.weight.data,
+                    param.data,
                     p=2,
                 )
                 ** 2
             )
-        return ans * 0
+        return ans
 
     def l1_regularization_skip(self):
         return torch.norm(self.skip.weight.data, p=2, dim=0).sum()
@@ -206,16 +211,13 @@ class CNNLassoNetClassifier(LassoNetClassifier):
         super(CNNLassoNetClassifier, self).__init__(
             *args,
             **kwargs,
-            batch_size=128,
-            n_iters=(50, 10),
-            lambda_start=2,
-            path_multiplier=1.1
+            batch_size=256,
+            n_iters=(200, 20),
+            lambda_start=100,
+            path_multiplier=1.2
         )
 
     def _init_model(self, X, y):
-        output_shape = self._output_shape(y)
-        if self.class_weight is not None:
-            assert output_shape == len(self.class_weight)
         if self.torch_seed is not None:
             torch.manual_seed(self.torch_seed)
         self.model = CNNLassoNetModel(
