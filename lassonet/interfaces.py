@@ -12,6 +12,7 @@ from sklearn.base import (
 )
 from sklearn.model_selection import train_test_split
 import torch
+from tqdm import tqdm
 from .model import LassoNet
 from .cox import CoxPHLoss, concordance_index
 
@@ -390,7 +391,9 @@ class BaseLassoNet(BaseEstimator, metaclass=ABCMeta):
 
         optimizer = self.optim_path(self.model.parameters())
 
-        for current_lambda in lambda_seq:
+        pbar = tqdm(lambda_seq)
+        for i, current_lambda in enumerate(pbar):
+            pbar.set_description(f"Iteration {i} - Lambda: {current_lambda}, selected_count: {self.model.selected_count()}")
             if self.model.selected_count() == 0:
                 break
             hist.append(

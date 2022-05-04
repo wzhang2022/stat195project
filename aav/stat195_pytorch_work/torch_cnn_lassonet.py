@@ -203,7 +203,14 @@ class CNNLassoNetModel(nn.Module):
 
 class CNNLassoNetClassifier(LassoNetClassifier):
     def __init__(self, *args, **kwargs):
-        super(CNNLassoNetClassifier, self).__init__(*args, **kwargs, batch_size=128)
+        super(CNNLassoNetClassifier, self).__init__(
+            *args,
+            **kwargs,
+            batch_size=128,
+            n_iters=(50, 10),
+            lambda_start=2,
+            path_multiplier=1.1
+        )
 
     def _init_model(self, X, y):
         output_shape = self._output_shape(y)
