@@ -62,6 +62,7 @@ def evaluate(net, test_loader, device):
 
 
 if __name__ == "__main__":
+    start = time.time()
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     # device = torch.device('cpu')
     df = pd.read_csv("../../stat_195_project_data.csv")

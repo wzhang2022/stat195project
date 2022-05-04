@@ -1,3 +1,5 @@
+from itertools import islice
+
 import numpy as np
 import torch.nn as nn
 import torch
@@ -6,6 +8,7 @@ from torch import optim
 from torch.utils.data import Dataset, DataLoader, TensorDataset
 
 from lassonet import LassoNetClassifier, LassoNet
+from lassonet.prox import inplace_prox
 
 
 class CNNBaseline(nn.Module):
@@ -125,7 +128,7 @@ class CNNModel:
         return np.concatenate(y_pred, axis=0)
 
 
-class CNNLassoNetModel(LassoNet):
+class CNNLassoNetModel(nn.Module):
     def __init__(self, seq_len=58, num_residues=20):
         super(CNNLassoNetModel, self).__init__()
         self.seq_len = seq_len
@@ -154,10 +157,55 @@ class CNNLassoNetModel(LassoNet):
         cnn_output = self.cnn_module(scaled_input)
         return result + cnn_output
 
+    def prox(self, *, lambda_, lambda_bar=0, M=1):
+        print(f"beta: {self.skip.weight.shape}, theta: {self.layers[0].weight.shape}")
+        with torch.no_grad():
+            inplace_prox(
+                beta=self.skip,
+                theta=self.layers[0],
+                lambda_=lambda_,
+                lambda_bar=lambda_bar,
+                M=M,
+            )
+
+    def l2_regularization(self):
+        """
+        L2 regulatization of the MLP without the first layer
+        which is bounded by the skip connection
+        """
+        ans = 0
+        for layer in islice(self.layers, 0, None):
+            ans += (
+                torch.norm(
+                    layer.weight.data,
+                    p=2,
+                )
+                ** 2
+            )
+        return ans * 0
+
+    def l1_regularization_skip(self):
+        return torch.norm(self.skip.weight.data, p=2, dim=0).sum()
+
+    def l2_regularization_skip(self):
+        return torch.norm(self.skip.weight.data, p=2)
+
+    def input_mask(self):
+        with torch.no_grad():
+            return torch.norm(self.skip.weight.data, p=2, dim=0) != 0
+
+    def selected_count(self):
+        return self.input_mask().sum().item()
+
+    def cpu_state_dict(self):
+        return {k: v.detach().clone().cpu() for k, v in self.state_dict().items()}
+
+
 
 class CNNLassoNetClassifier(LassoNetClassifier):
     def __init__(self, *args, **kwargs):
         super(CNNLassoNetClassifier, self).__init__(*args, **kwargs, batch_size=128)
+
     def _init_model(self, X, y):
         output_shape = self._output_shape(y)
         if self.class_weight is not None:
