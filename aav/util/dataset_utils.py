@@ -254,6 +254,7 @@ def as_estimator_input_fn(
 
   def input_fn():
     """A tf.Estimator input_fn."""
+    print(dataset)
     ds = dataset.shuffle(buffer_size=10000) if shuffle else dataset
 
     if num_epochs is None:

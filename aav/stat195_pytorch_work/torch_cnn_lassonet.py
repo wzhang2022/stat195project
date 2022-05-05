@@ -1,6 +1,6 @@
 from itertools import islice
 
-from tqdm import tqdm
+from tqdm.auto import tqdm
 import numpy as np
 import torch.nn as nn
 import torch

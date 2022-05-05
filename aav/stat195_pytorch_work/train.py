@@ -1,3 +1,5 @@
+import time
+
 import numpy as np
 import pandas as pd
 from torch import nn, optim
@@ -86,3 +88,4 @@ if __name__ == "__main__":
     model.path(sequences[train_set.index.values], train_set['is_viable'].values)
     y_pred = model.predict(sequences[test_set.index.values])
     print(f"Accuracy is {sum(y_pred == test_set['is_viable']) / len(y_pred)}")
+    print(f"Time taken is {time.time() - start}")

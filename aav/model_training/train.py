@@ -42,6 +42,7 @@ train.py \
     --validation_path=/path/to/datasets/valid.tfrecord \
     --alsologtostderr
 
+train.py --model=cnn --seq_encoder=fixedlen-id --model_dir=/tmp/cnn_model_dir --train_path=/path/to/datasets/train.tfrecord --validation_path=/path/to/datasets/valid.tfrecord --alsologtostderr
 Run RNN:
 train.py \
     --model=rnn \
@@ -66,7 +67,9 @@ import rnn
 import tensorflow as tf
 from tensorflow import estimator as tf_estimator
 import train_utils
-from ..util import dataset_utils
+import sys
+sys.path.append('../util')
+import dataset_utils
 
 
 FLAGS = flags.FLAGS
@@ -245,8 +248,8 @@ def main(_):
     logging.info('Overriding hyperparameters with %r', FLAGS.hparams)
     hparams.parse(FLAGS.hparams)
     # Add FLAGS-based hparams that are required.
-  hparams.add_param('model', FLAGS.model)
-  hparams.add_param('seq_encoder', FLAGS.seq_encoder)
+  # hparams.add_hparam('model_', FLAGS.model)
+  # hparams.add_hparam('seq_encoder_', FLAGS.seq_encoder)
 
   train_input_fn = dataset_utils.as_estimator_input_fn(
       (dataset_utils.read_tfrecord_dataset(FLAGS.train_path)
