@@ -181,7 +181,7 @@ class CNNLassoNetModel(nn.Module):
         for param in self.cnn_module.parameters():
             ans += (
                 torch.norm(
-                    param.data,
+                    param,
                     p=2,
                 )
                 ** 2
@@ -189,10 +189,10 @@ class CNNLassoNetModel(nn.Module):
         return ans
 
     def l1_regularization_skip(self):
-        return torch.norm(self.skip.weight.data, p=2, dim=0).sum()
+        return torch.norm(self.skip.weight, p=2, dim=0).sum()
 
     def l2_regularization_skip(self):
-        return torch.norm(self.skip.weight.data, p=2)
+        return torch.norm(self.skip.weight, p=2)
 
     def input_mask(self):
         with torch.no_grad():
