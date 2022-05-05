@@ -143,7 +143,7 @@ class BaseLassoNet(BaseEstimator, metaclass=ABCMeta):
         if optim is None:
             optim = (
                 partial(torch.optim.Adam, lr=1e-3),
-                partial(torch.optim.SGD, lr=1e-3, momentum=0.9),
+                partial(torch.optim.SGD, lr=1e-3, momentum=0.9, weight_decay=0.001),
             )
         if isinstance(optim, partial):
             optim = (optim, optim)

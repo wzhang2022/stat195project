@@ -112,7 +112,7 @@ class CNNModel:
         criterion = nn.NLLLoss()
         optimizer = optim.AdamW(self.net.parameters(), lr=0.001)
         train_set = TensorDataset(torch.as_tensor(X, dtype=torch.float32), torch.as_tensor(y, dtype=torch.float32))
-        train_loader = DataLoader(train_set, batch_size=128, shuffle=True)
+        train_loader = DataLoader(train_set, batch_size=batch_size, shuffle=True)
         self.net.train()
         for epoch in tqdm(range(num_epochs)):
             for i, (seq, labels) in enumerate(train_loader):
@@ -207,14 +207,21 @@ class CNNLassoNetModel(nn.Module):
 
 
 class CNNLassoNetClassifier(LassoNetClassifier):
-    def __init__(self, *args, **kwargs):
+    def __init__(
+            self,
+            *args,
+            batch_size=512,
+            n_iters=(30, 10),
+            lambda_start=100,
+            path_multiplier=1.2,
+            **kwargs):
         super(CNNLassoNetClassifier, self).__init__(
             *args,
-            **kwargs,
-            batch_size=256,
-            n_iters=(200, 20),
-            lambda_start=100,
-            path_multiplier=1.2
+            batch_size=batch_size,
+            n_iters=n_iters,
+            lambda_start=lambda_start,
+            path_multiplier=path_multiplier,
+            **kwargs
         )
 
     def _init_model(self, X, y):
